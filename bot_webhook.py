@@ -21,7 +21,6 @@ async def lifespan(app: FastAPI):
     await bot.send_message(ADMIN_CHAT_ID, "Я запустився 🚀🤖⚡️")
     yield
 
-    await bot.delete_webhook()
     await bot.session.close()
 
 
