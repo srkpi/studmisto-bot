@@ -3,7 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from typing import Dict, Any
 
-from config import GOOGLE_SERVICE_ACCOUNT_JSON, SPREADSHEET_ID
+from config import GOOGLE_SERVICE_ACCOUNT_FILENAME, SPREADSHEET_ID
 from constants.order_statuses import ORDER_STATUS_SPREADSHEET_NAMES, OrderStatus
 from constants.order_types import ORDER_TYPE_NAMES, OrderType
 
@@ -27,8 +27,8 @@ WORKSHEET_TITLE_ROW = [
 ]
 
 
-creds = Credentials.from_service_account_info(
-    GOOGLE_SERVICE_ACCOUNT_JSON, scopes=SCOPES
+creds = Credentials.from_service_account_file(
+    GOOGLE_SERVICE_ACCOUNT_FILENAME, scopes=SCOPES
 )
 
 gc = gspread.authorize(creds)
