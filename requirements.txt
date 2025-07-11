@@ -1,0 +1,7 @@
+aiogram
+fastapi
+gspread
+google-auth
+motor
+python-dotenv
+uvicorn
