@@ -1,4 +1,3 @@
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException
@@ -14,11 +13,22 @@ dp = Dispatcher()
 register_handlers(dp, db)
 
 
+async def set_webhook():
+    await bot.set_webhook(
+        url=WEBHOOK_URL,
+        secret_token=WEBHOOK_SECRET,
+        allowed_updates=["message", "callback_query"],
+        drop_pending_updates=True,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_indexes(db)
-    await bot.set_webhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+
+    await set_webhook()
     await bot.send_message(ADMIN_CHAT_ID, "Я запустився 🚀🤖⚡️")
+
     yield
 
     await bot.session.close()
@@ -29,6 +39,13 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def health_check():
+    return {"ok": True}
+
+
+@app.get("/set_webhook")
+async def set_webhook_handler():
+    await set_webhook()
+
     return {"ok": True}
 
 
