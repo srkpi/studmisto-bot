@@ -10,7 +10,7 @@ from aiogram.types import (
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo.database import Database
 
 from feedback_service import (
@@ -23,7 +23,8 @@ from constants.dorms import DORM_KEYBOARD
 from constants.order_types import OrderType, ORDER_TYPE_NAMES, ORDER_TYPE_CHAT_THREADS
 from constants.order_statuses import OrderStatus, ORDER_STATUS_NAMES
 
-from config import ADMIN_CHAT_ID
+from config import ADMIN_CHAT_ID, AFTER_HOURS_PHONE
+
 from states.feedback import FeedbackStates
 from states.request_form import RequestForm
 
@@ -31,6 +32,7 @@ from utils.delete_last_message import delete_last_message
 from utils.get_queue_position import get_queue_position
 from utils.get_status_keyboard import get_status_keyboard
 from utils.is_valid_ukraine_phone import is_valid_ukraine_phone
+from utils.is_within_work_hours import is_within_work_hours
 from utils.str_to_digits_id import srt_to_digits_id
 
 from google_sheets_service import add_order_to_sheet, update_order_status_in_sheet
@@ -171,6 +173,16 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
                 ADMIN_CHAT_ID, message_thread_id=thread_id
             )
 
+        now = datetime.now(timezone.utc)
+
+        if is_within_work_hours(now):
+            info_msg = "Очікуйте на відповідь"
+        else:
+            info_msg = "Зараз неробочий час, тому вона буде розглянута вранці"
+
+            if AFTER_HOURS_PHONE:
+                info_msg += f". У разі аварійної ситуації телефонуйте за номером: {AFTER_HOURS_PHONE}"
+
         forwarded_message_id = forwarded_msg.message_id if forwarded_msg else None
 
         timestamp = datetime.now()
@@ -179,7 +191,7 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             "phone": data["phone"],
             "dorm": data["dorm"],
             "problem_type": data["problem_type"],
-            "details": msg.text,
+            "details": msg.text or msg.caption,
             "forwarded_message_id": forwarded_msg.message_id if forwarded_msg else None,
             "status": OrderStatus.WAITING.value,
             "timestamp": timestamp,
@@ -205,8 +217,8 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         queue_position = await get_queue_position(db.requests, order_type, timestamp)
         user_message = await msg.answer(
-            f"Заявка #{request_digits_id} відправлена."
-            "Очікуйте на відповідь. Якщо бажаєте додати більше інформації до заявки, відправте реплай на це повідомлення.\n"
+            f"Заявка #{request_digits_id} відправлена.\n"
+            f"{info_msg}. Якщо бажаєте додати більше інформації, відправте реплай на це повідомлення.\n"
             f"Позиція в черзі: {queue_position}"
         )
         admin_message = await msg.bot.send_message(
@@ -214,6 +226,7 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             msg_text,
             message_thread_id=thread_id,
             reply_markup=get_status_keyboard(OrderStatus.WAITING, request_id),
+            parse_mode=None,
         )
         await state.clear()
         await store_message_mapping(
