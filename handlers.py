@@ -10,7 +10,7 @@ from aiogram.types import (
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pymongo.database import Database
 
 from feedback_service import (
@@ -23,7 +23,7 @@ from constants.dorms import DORM_KEYBOARD
 from constants.order_types import OrderType, ORDER_TYPE_NAMES, ORDER_TYPE_CHAT_THREADS
 from constants.order_statuses import OrderStatus, ORDER_STATUS_NAMES
 
-from config import ADMIN_CHAT_ID, AFTER_HOURS_PHONE
+from config import ADMIN_CHAT_ID, AFTER_HOURS_PHONE, TIMEZONE_OFFSET
 
 from states.feedback import FeedbackStates
 from states.request_form import RequestForm
@@ -173,9 +173,9 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
                 ADMIN_CHAT_ID, message_thread_id=thread_id
             )
 
-        now = datetime.now(timezone.utc)
+        timestamp = datetime.now(timezone.utc) + timedelta(hours=TIMEZONE_OFFSET)
 
-        if is_within_work_hours(now):
+        if is_within_work_hours(timestamp):
             info_msg = "Очікуйте на відповідь"
         else:
             info_msg = "Зараз неробочий час, тому вона буде розглянута вранці"
@@ -185,7 +185,6 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         forwarded_message_id = forwarded_msg.message_id if forwarded_msg else None
 
-        timestamp = datetime.now()
         order_data = {
             "name": data["name"],
             "phone": data["phone"],
@@ -263,7 +262,7 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             await call.answer("Заявку не знайдено", show_alert=True)
             return
 
-        edit_timestamp = datetime.now()
+        edit_timestamp = datetime.now(timezone.utc) + timedelta(hours=TIMEZONE_OFFSET)
 
         await db.requests.update_one(
             {"_id": ObjectId(request_id)},
