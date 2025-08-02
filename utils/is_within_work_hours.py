@@ -1,6 +1,6 @@
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
-from config import TIMEZONE_OFFSET, WORK_HOURS_END, WORK_HOURS_START
+from config import WORK_HOURS_END, WORK_HOURS_START
 
 
 def is_within_work_hours(now: datetime) -> bool:
@@ -9,8 +9,7 @@ def is_within_work_hours(now: datetime) -> bool:
     start_hour, start_minute = map(int, WORK_HOURS_START.split(":"))
     end_hour, end_minute = map(int, WORK_HOURS_END.split(":"))
 
-    local_now = now + timedelta(hours=TIMEZONE_OFFSET)
-    current_time = local_now.time()
+    current_time = now.time()
     start = time(start_hour, start_minute)
     end = time(end_hour, end_minute)
 
