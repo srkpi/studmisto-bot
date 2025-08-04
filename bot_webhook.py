@@ -27,7 +27,6 @@ async def lifespan(app: FastAPI):
     setup_indexes(db)
 
     await set_webhook()
-    await bot.send_message(ADMIN_CHAT_ID, "Я запустився 🚀🤖⚡️")
 
     yield
 

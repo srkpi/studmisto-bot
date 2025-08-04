@@ -8,7 +8,7 @@ def get_status_keyboard(
 ) -> InlineKeyboardMarkup:
     buttons = []
     for status in OrderStatus:
-        if status == current_status:
+        if status == current_status or status == OrderStatus.CANCELLED:
             continue
 
         buttons.append(

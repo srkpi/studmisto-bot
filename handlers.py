@@ -28,9 +28,13 @@ from config import ADMIN_CHAT_ID, AFTER_HOURS_PHONE, TIMEZONE_OFFSET
 from states.feedback import FeedbackStates
 from states.request_form import RequestForm
 
+from utils.back_btn import back_btn
 from utils.delete_last_message import delete_last_message
+from utils.extract_digits_id_from_text import extract_digits_id_from_text
 from utils.get_queue_position import get_queue_position
 from utils.get_status_keyboard import get_status_keyboard
+from utils.get_user_label import get_user_label
+from utils.is_user_order_message import is_user_order_message
 from utils.is_valid_ukraine_phone import is_valid_ukraine_phone
 from utils.is_within_work_hours import is_within_work_hours
 from utils.str_to_digits_id import srt_to_digits_id
@@ -54,14 +58,6 @@ cancel_feedback_btn = InlineKeyboardMarkup(
         [InlineKeyboardButton(text="❌ Закрити", callback_data="cancel_feedback")]
     ]
 )
-
-
-def back_btn(target) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="⬅ Назад", callback_data=f"back:{target}")]
-        ]
-    )
 
 
 def register_handlers(dp: Dispatcher, db: Database) -> None:
@@ -184,6 +180,7 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
                 info_msg += f". У разі аварійної ситуації телефонуйте за номером: {AFTER_HOURS_PHONE}"
 
         forwarded_message_id = forwarded_msg.message_id if forwarded_msg else None
+        user_id = msg.from_user.id
 
         order_data = {
             "name": data["name"],
@@ -195,7 +192,8 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             "status": OrderStatus.WAITING.value,
             "timestamp": timestamp,
             "edit_timestamp": timestamp,
-            "user_id": msg.from_user.id,
+            "set_status_user_id": user_id,
+            "user_id": user_id,
         }
 
         result = await db.requests.insert_one(order_data)
@@ -266,7 +264,13 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         await db.requests.update_one(
             {"_id": ObjectId(request_id)},
-            {"$set": {"status": status.value, "edit_timestamp": edit_timestamp}},
+            {
+                "$set": {
+                    "status": status.value,
+                    "set_status_user_id": call.from_user.id,
+                    "edit_timestamp": edit_timestamp,
+                }
+            },
         )
 
         request_digits_id = srt_to_digits_id(request_id)
@@ -288,7 +292,8 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         if request["details"]:
             msg_text += f"Опис: {request['details']}\n"
 
-        msg_text += f"Статус: {ORDER_STATUS_NAMES[status]}"
+        user_label = get_user_label(call)
+        msg_text += f"Статус: {ORDER_STATUS_NAMES[status]} [{user_label}]"
 
         await call.message.edit_text(
             msg_text,
@@ -450,6 +455,97 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             reply_markup=cancel_feedback_btn,
         )
         await state.update_data(last_message_id=answer.message_id)
+
+    @private_router.message(Command("cancel"))
+    async def user_cancel_order(msg: Message) -> None:
+        if not msg.reply_to_message or not is_user_order_message(msg.reply_to_message):
+            await msg.answer(
+                "Цю команду потрібно надсилати у відповідь на повідомлення про створення заявки або про зміну її статусу."
+            )
+            return
+
+        digits_id = extract_digits_id_from_text(msg.reply_to_message.text)
+        if not digits_id:
+            await msg.answer("Це не повідомлення заявки.")
+            return
+
+        user_id = msg.from_user.id
+        requests = await db.requests.find({"user_id": user_id}).to_list(length=None)
+
+        order = None
+        for req in requests:
+            if srt_to_digits_id(str(req["_id"])) == digits_id:
+                order = req
+                break
+
+        if not order:
+            await msg.answer("Заявку не знайдено.")
+            return
+
+        status = order["status"]
+
+        if status == OrderStatus.CANCELLED.value:
+            await msg.answer("Заявка вже скасована!")
+            return
+
+        if status not in (OrderStatus.WAITING.value, OrderStatus.CLARIFICATION.value):
+            await msg.answer(
+                'Заявку можна скасувати лише якщо вона має статус "Очікує" або "Уточнення"!'
+            )
+            return
+
+        edit_timestamp = datetime.now(timezone.utc) + timedelta(hours=TIMEZONE_OFFSET)
+        await db.requests.update_one(
+            {"_id": order["_id"]},
+            {
+                "$set": {
+                    "status": OrderStatus.CANCELLED.value,
+                    "set_status_user_id": user_id,
+                    "edit_timestamp": edit_timestamp,
+                }
+            },
+        )
+
+        await msg.answer(f"Заявку #{digits_id} скасовано.")
+
+        mapping = await db.feedback.find_one(
+            {"user_id": user_id, "user_message_id": msg.reply_to_message.message_id}
+        )
+
+        admin_message_id = None
+        if mapping:
+            admin_message_id = mapping.get("admin_message_id")
+
+        order_type = OrderType[order["problem_type"]]
+        msg_text = (
+            f"Заявка #{digits_id}\n"
+            f"ПІБ: {order['name']}\n"
+            f"Телефон: {order['phone']}\n"
+            f"Гуртожиток: {order['dorm']}\n"
+            f"Тип: {ORDER_TYPE_NAMES[order_type]}\n"
+        )
+
+        if order.get("details"):
+            msg_text += f"Опис: {order['details']}\n"
+
+        msg_text += f"Статус: {ORDER_STATUS_NAMES[OrderStatus.CANCELLED]}"
+
+        if admin_message_id:
+            try:
+                await msg.bot.edit_message_text(
+                    text=msg_text,
+                    chat_id=ADMIN_CHAT_ID,
+                    message_id=admin_message_id,
+                )
+            except Exception as e:
+                pass
+
+        try:
+            update_order_status_in_sheet(
+                digits_id, OrderStatus.CANCELLED, order_type, edit_timestamp
+            )
+        except Exception as e:
+            pass
 
     @private_router.message(F.reply_to_message)
     async def user_feedback_handler(msg: Message) -> None:

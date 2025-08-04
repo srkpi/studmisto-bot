@@ -7,6 +7,7 @@ class OrderStatus(Enum):
     CLARIFICATION = "CLARIFICATION"
     REJECTED = "REJECTED"
     COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 ORDER_STATUS_NAMES: dict[OrderStatus, str] = {
@@ -15,6 +16,7 @@ ORDER_STATUS_NAMES: dict[OrderStatus, str] = {
     OrderStatus.CLARIFICATION: "📝 Уточнення",
     OrderStatus.REJECTED: "❌ Відмовлено",
     OrderStatus.COMPLETED: "✅ Виконано",
+    OrderStatus.CANCELLED: "🚫 Скасовано",
 }
 
 ORDER_STATUS_SPREADSHEET_NAMES: dict[OrderStatus, str] = {
@@ -23,4 +25,5 @@ ORDER_STATUS_SPREADSHEET_NAMES: dict[OrderStatus, str] = {
     OrderStatus.CLARIFICATION: "Уточнення",
     OrderStatus.REJECTED: "Відмовлено",
     OrderStatus.COMPLETED: "Виконано",
+    OrderStatus.CANCELLED: "Скасовано",
 }
