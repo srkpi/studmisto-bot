@@ -19,7 +19,7 @@ from feedback_service import (
     store_message_mapping,
     user_feedback_reply_handler,
 )
-from constants.dorms import DORM_KEYBOARD
+from constants.dorms import DORM_KEYBOARD, DORM_RESPONSIBLES
 from constants.order_types import OrderType, ORDER_TYPE_NAMES, ORDER_TYPE_CHAT_THREADS
 from constants.order_statuses import OrderStatus, ORDER_STATUS_NAMES
 
@@ -199,6 +199,10 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         result = await db.requests.insert_one(order_data)
         request_id = str(result.inserted_id)
         request_digits_id = srt_to_digits_id(request_id)
+
+        dorm_responsible = DORM_RESPONSIBLES.get(order_data["dorm"])
+        dorm_responsible_label = f", {dorm_responsible}" if dorm_responsible else ""
+
         msg_text = (
             f"Нова заявка #{request_digits_id}\n"
             f"ПІБ: {order_data['name']}\n"
@@ -210,7 +214,10 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         if forwarded_msg is None:
             msg_text += f"Опис: {order_data['details']}\n"
 
-        msg_text += f"Статус: {ORDER_STATUS_NAMES[OrderStatus.WAITING]}"
+        msg_text += (
+            f"Статус: {ORDER_STATUS_NAMES[OrderStatus.WAITING]}\n\n"
+            f"#гурт{order_data['dorm']}{dorm_responsible_label}"
+        )
 
         queue_position = await get_queue_position(db.requests, order_type, timestamp)
         user_message = await msg.answer(
@@ -281,6 +288,9 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         order_type = OrderType[request["problem_type"]]
 
+        dorm_responsible = DORM_RESPONSIBLES.get(request["dorm"])
+        dorm_responsible_label = f", {dorm_responsible}" if dorm_responsible else ""
+
         msg_text = (
             f"Заявка #{request_digits_id}\n"
             f"ПІБ: {request['name']}\n"
@@ -293,7 +303,10 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             msg_text += f"Опис: {request['details']}\n"
 
         user_label = get_user_label(call)
-        msg_text += f"Статус: {ORDER_STATUS_NAMES[status]} [{user_label}]"
+        msg_text += (
+            f"Статус: {ORDER_STATUS_NAMES[status]} [{user_label}]\n\n"
+            f"#гурт{request['dorm']}{dorm_responsible_label}"
+        )
 
         await call.message.edit_text(
             msg_text,
@@ -516,6 +529,9 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         if mapping:
             admin_message_id = mapping.get("admin_message_id")
 
+        dorm_responsible = DORM_RESPONSIBLES.get(order["dorm"])
+        dorm_responsible_label = f", {dorm_responsible}" if dorm_responsible else ""
+
         order_type = OrderType[order["problem_type"]]
         msg_text = (
             f"Заявка #{digits_id}\n"
@@ -528,7 +544,10 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         if order.get("details"):
             msg_text += f"Опис: {order['details']}\n"
 
-        msg_text += f"Статус: {ORDER_STATUS_NAMES[OrderStatus.CANCELLED]}"
+        msg_text += (
+            f"Статус: {ORDER_STATUS_NAMES[OrderStatus.CANCELLED]}\n\n"
+            f"#гурт{order['dorm']}{dorm_responsible_label}"
+        )
 
         if admin_message_id:
             try:
@@ -537,14 +556,14 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
                     chat_id=ADMIN_CHAT_ID,
                     message_id=admin_message_id,
                 )
-            except Exception as e:
+            except Exception:
                 pass
 
         try:
             update_order_status_in_sheet(
                 digits_id, OrderStatus.CANCELLED, order_type, edit_timestamp
             )
-        except Exception as e:
+        except Exception:
             pass
 
     @private_router.message(F.reply_to_message)

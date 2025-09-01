@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, HTTPException
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 
-from config import ADMIN_CHAT_ID, BOT_TOKEN, WEBHOOK_SECRET, WEBHOOK_URL
+from config import BOT_TOKEN, WEBHOOK_SECRET, WEBHOOK_URL
 from database import db, setup_indexes
 from handlers import register_handlers
 
