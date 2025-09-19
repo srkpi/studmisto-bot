@@ -13,4 +13,6 @@ class Request(TypedDict):
     timestamp: datetime
     edit_timestamp: datetime
     user_id: int
+    username: Optional[str]
+    full_name: Optional[str]
     set_status_user_id: int

@@ -181,6 +181,12 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         forwarded_message_id = forwarded_msg.message_id if forwarded_msg else None
         user_id = msg.from_user.id
+        username = msg.from_user.username
+        full_name = (
+            f"{msg.from_user.first_name} {msg.from_user.last_name}"
+            if msg.from_user.last_name
+            else msg.from_user.first_name
+        )
 
         order_data = {
             "name": data["name"],
@@ -194,6 +200,8 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             "edit_timestamp": timestamp,
             "set_status_user_id": user_id,
             "user_id": user_id,
+            "username": username,
+            "full_name": full_name,
         }
 
         result = await db.requests.insert_one(order_data)
@@ -202,10 +210,12 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
 
         dorm_responsible = DORM_RESPONSIBLES.get(order_data["dorm"])
         dorm_responsible_label = f", {dorm_responsible}" if dorm_responsible else ""
+        telegram_label = f"@{username}" if username else full_name
 
         msg_text = (
             f"Нова заявка #{request_digits_id}\n"
             f"ПІБ: {order_data['name']}\n"
+            f"Телеграм: {telegram_label}\n"
             f"Телефон: {order_data['phone']}\n"
             f"Гуртожиток: {order_data['dorm']}\n"
             f"Тип: {ORDER_TYPE_NAMES[order_type]}\n"
@@ -291,9 +301,18 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         dorm_responsible = DORM_RESPONSIBLES.get(request["dorm"])
         dorm_responsible_label = f", {dorm_responsible}" if dorm_responsible else ""
 
+        username = request.get("username")
+        full_name = request.get("full_name")
+        telegram_label = f"@{username}" if username else full_name
+
+        # If order created before an update with saving usernames and full names in database
+        if telegram_label is None:
+            telegram_label = request.get("user_id")
+
         msg_text = (
             f"Заявка #{request_digits_id}\n"
             f"ПІБ: {request['name']}\n"
+            f"Телеграм: {telegram_label}\n"
             f"Телефон: {request['phone']}\n"
             f"Гуртожиток: {request['dorm']}\n"
             f"Тип: {ORDER_TYPE_NAMES[order_type]}\n"
