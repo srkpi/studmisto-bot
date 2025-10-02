@@ -291,10 +291,15 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
         )
 
         request_digits_id = srt_to_digits_id(request_id)
-        user_message = await call.bot.send_message(
-            request["user_id"],
-            f"Статус заявки #{request_digits_id} оновлено: {ORDER_STATUS_NAMES[status]}",
-        )
+        user_message = None
+
+        try:
+            user_message = await call.bot.send_message(
+                request["user_id"],
+                f"Статус заявки #{request_digits_id} оновлено: {ORDER_STATUS_NAMES[status]}",
+            )
+        except Exception:
+            pass
 
         order_type = OrderType[request["problem_type"]]
 
@@ -332,9 +337,10 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             reply_markup=get_status_keyboard(status, request_id),
         )
 
-        await store_message_mapping(
-            db, request["user_id"], user_message.message_id, call.message.message_id
-        )
+        if user_message:
+            await store_message_mapping(
+                db, request["user_id"], user_message.message_id, call.message.message_id
+            )
 
         try:
             update_order_status_in_sheet(
@@ -342,11 +348,6 @@ def register_handlers(dp: Dispatcher, db: Database) -> None:
             )
         except Exception as e:
             print(e)
-            await call.bot.send_message(
-                ADMIN_CHAT_ID,
-                "Не вдалось оновити статус в таблиці",
-                message_thread_id=call.message.message_thread_id,
-            )
 
     @private_router.callback_query(F.data.startswith("back:"))
     async def go_back(call: CallbackQuery, state: FSMContext) -> None:
