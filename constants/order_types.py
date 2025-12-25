@@ -7,7 +7,6 @@ class OrderType(Enum):
     PLUMBING = "PLUMBING"
     GAS = "GAS"
     ELEVATOR = "ELEVATOR"
-    CARPENTRY = "CARPENTRY"
     OTHER = "OTHER"
 
 
@@ -16,7 +15,6 @@ ORDER_TYPE_NAMES: dict[OrderType, str] = {
     OrderType.PLUMBING: "Сантехніка",
     OrderType.GAS: "Газ",
     OrderType.ELEVATOR: "Ліфт",
-    OrderType.CARPENTRY: "Столярство",
     OrderType.OTHER: "Інше",
 }
 
